@@ -1505,11 +1505,21 @@ function applyFixedCorrections(cleaned){
       cleaned.push(s);
     }
     const beforeWatched = watchedCount(s);
-    Object.assign(s, patch);
-    if(options.full) setFullWatched(s, options.status || 'completed_final');
+    const preserveManual = !!s.userEdited;
+    if(preserveManual){
+      // Manuell bearbeitete Serien behalten ihre gespeicherten Werte.
+      // Startdaten/Migration dürfen nur fehlende Hilfsinfos ergänzen, nicht Staffeln/Folgen/Fortschritt überschreiben.
+      if(!s.imdb && patch.imdb) s.imdb = patch.imdb;
+      if(!s.notes && patch.notes) s.notes = patch.notes;
+      if(!s.list && patch.list) s.list = patch.list;
+      if(!s.status && patch.status) s.status = patch.status;
+    } else {
+      Object.assign(s, patch);
+    }
+    if(options.full && !preserveManual) setFullWatched(s, options.status || 'completed_final');
     if(options.minProgress){
       const targetWatched = options.minProgress.watched;
-      if(beforeWatched < targetWatched){
+      if(!preserveManual && beforeWatched < targetWatched){
         s.currentSeason = options.minProgress.season;
         s.currentEpisode = options.minProgress.episode;
         s.status = options.minProgress.status || 'watching';
@@ -1530,7 +1540,7 @@ function applyFixedCorrections(cleaned){
   addOrUpdate('Suits', {counts:[12,16,16,16,16,16,16,16,10], imdb:'https://www.imdb.com/title/tt1632701/episodes/'}, {full:true});
   // angefangen / up to date
   addOrUpdate('Squid Game', {counts:[9,7,6], imdb:'https://www.imdb.com/title/tt10919420/episodes/', list:'watch', notes:'Staffel 1 geschaut.'}, {minProgress:{season:1, episode:9, watched:9, status:'watching'}});
-  addOrUpdate('Off Campus', {counts:[7], imdb:'https://www.imdb.com/title/tt33546863/episodes/', list:'watched', notes:'Staffel 1 geschaut; neue Folgen/Staffeln später ergänzbar.'}, {minProgress:{season:1, episode:7, watched:7, status:'up_to_date'}});
+  addOrUpdate('Off Campus', {counts:[8], imdb:'https://www.imdb.com/title/tt33546863/episodes/', list:'watched', notes:'Staffel 1 geschaut; neue Folgen/Staffeln später ergänzbar.'}, {minProgress:{season:1, episode:8, watched:8, status:'up_to_date'}});
   addOrUpdate('The Rookie', {counts:[20,20,14,22,22,10,18,18], imdb:'https://www.imdb.com/title/tt7587890/episodes/', list:'watch', notes:'Aktuell in Staffel 5.'}, {minProgress:{season:5, episode:0, watched:76, status:'watching'}});
   // Korrekturen Folgenzahlen
   addOrUpdate('The Code', {counts:[12], imdb:'https://www.imdb.com/title/tt8888168/episodes/'});
@@ -1555,7 +1565,7 @@ function cleanupSeries(list){
       s.list='watched';
       if(pct(s)===100) s.status='completed_final';
     }
-    if(titleKey(s.title)==='squid game' && watchedCount(s)<9){
+    if(!s.userEdited && titleKey(s.title)==='squid game' && watchedCount(s)<9){
       s.currentSeason=1; s.currentEpisode=s.counts[0]||9; s.status='watching'; s.list='watch'; s.notes=s.notes||'Staffel 1 geschaut.';
     }
     if(watchedCount(s)>0 && s.status==='not_started') s.status='watching';
@@ -1598,19 +1608,19 @@ function load(){
     try {
       const parsed = JSON.parse(raw);
       const merged = mergeWithSeed(parsed.series || parsed);
-      const data = {version:8, series: cleanupSeries(merged)};
+      const data = {version:9, series: cleanupSeries(merged)};
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(data));
       return data;
     } catch(e){}
   }
-  const data={version:8, series:cleanupSeries(seed)};
+  const data={version:9, series:cleanupSeries(seed)};
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(data));
   return data;
 }
 let state=load(); state.series=mergeWithSeed(state.series); let activeTab='watch'; save();
-function save(){ state.version=8; state.series=cleanupSeries(state.series); localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(state)); }
+function save(){ state.version=9; state.series=cleanupSeries(state.series); localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(state)); }
 function statusLabel(v){ return ({not_started:'Nicht begonnen',watching:'Schaue gerade',up_to_date:'Alles Verfügbare geschaut',completed_final:'Serie beendet + komplett geschaut',completed:'Komplett geschaut (alt)',paused:'Pausiert',dropped:'Abgebrochen'})[v]||v; }
 function statusClass(s){ return ['completed_final','up_to_date','completed'].includes(s.status) ? 'ok' : (pct(s)>0 ? 'warn' : ''); }
 function escapeHtml(s){ return String(s||'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
@@ -1701,12 +1711,12 @@ function openSeriesEditor(id){ const s=id?state.series.find(x=>x.id===id):null; 
 document.getElementById('addSeriesBtn').onclick=()=>openSeriesEditor();
 document.getElementById('cancelSeriesBtn').onclick=()=>document.getElementById('seriesDialog').close();
 document.getElementById('deleteSeriesBtn').onclick=()=>{ const id=document.getElementById('seriesId').value; if(confirm('Serie wirklich löschen?')){ state.series=state.series.filter(s=>s.id!==id); save(); document.getElementById('seriesDialog').close(); document.getElementById('detailDialog').close(); render(); } };
-document.getElementById('seriesForm').onsubmit=e=>{ e.preventDefault(); const id=document.getElementById('seriesId').value; const counts=parseCounts(document.getElementById('seasonCountsInput').value); if(!counts.length) return alert('Bitte Staffel-Folgen angeben, z.B. 8,8,10'); let s=state.series.find(x=>x.id===id); if(!s){ s={id:crypto.randomUUID()}; state.series.push(s); } s.title=document.getElementById('titleInput').value.trim(); s.list=document.getElementById('listInput').value; s.status=document.getElementById('statusInput').value; s.imdb=document.getElementById('imdbInput').value.trim()||imdbFind(s.title); s.counts=counts; s.currentSeason=parseInt(document.getElementById('currentSeasonInput').value||0,10); s.currentEpisode=parseInt(document.getElementById('currentEpisodeInput').value||0,10); if(s.currentSeason>counts.length) s.currentSeason=counts.length; if(s.currentSeason>0 && s.currentEpisode>counts[s.currentSeason-1]) s.currentEpisode=counts[s.currentSeason-1]; s.dateMode=document.getElementById('dateModeInput').value; s.lastDate=s.dateMode==='today'?todayISO():(s.dateMode==='na'||s.dateMode==='none'?'':document.getElementById('lastDateInput').value); s.notes=document.getElementById('notesInput').value.trim(); syncStatus(s); s.updatedAt=Date.now(); save(); document.getElementById('seriesDialog').close(); document.getElementById('detailDialog').close(); render(); };
+document.getElementById('seriesForm').onsubmit=e=>{ e.preventDefault(); const id=document.getElementById('seriesId').value; const counts=parseCounts(document.getElementById('seasonCountsInput').value); if(!counts.length) return alert('Bitte Staffel-Folgen angeben, z.B. 8,8,10'); let s=state.series.find(x=>x.id===id); if(!s){ s={id:crypto.randomUUID()}; state.series.push(s); } s.title=document.getElementById('titleInput').value.trim(); s.list=document.getElementById('listInput').value; s.status=document.getElementById('statusInput').value; s.imdb=document.getElementById('imdbInput').value.trim()||imdbFind(s.title); s.counts=counts; s.currentSeason=parseInt(document.getElementById('currentSeasonInput').value||0,10); s.currentEpisode=parseInt(document.getElementById('currentEpisodeInput').value||0,10); if(s.currentSeason>counts.length) s.currentSeason=counts.length; if(s.currentSeason>0 && s.currentEpisode>counts[s.currentSeason-1]) s.currentEpisode=counts[s.currentSeason-1]; s.dateMode=document.getElementById('dateModeInput').value; s.lastDate=s.dateMode==='today'?todayISO():(s.dateMode==='na'||s.dateMode==='none'?'':document.getElementById('lastDateInput').value); s.notes=document.getElementById('notesInput').value.trim(); s.userEdited=true; syncStatus(s); s.updatedAt=Date.now(); save(); document.getElementById('seriesDialog').close(); document.getElementById('detailDialog').close(); render(); };
 ['searchInput','listFilter','statusFilter','sortSelect'].forEach(id=>document.getElementById(id).addEventListener('input',renderGrid));
 document.querySelectorAll('.tab').forEach(btn=>btn.onclick=()=>{document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); activeTab=btn.dataset.list; document.getElementById('listFilter').value=''; renderGrid();});
 document.getElementById('exportBtn').onclick=()=>{
   const date=todayISO();
-  const exportState={...state, version:8, backupDate:date, exportedAt:new Date().toISOString()};
+  const exportState={...state, version:9, backupDate:date, exportedAt:new Date().toISOString()};
   const blob=new Blob([JSON.stringify(exportState,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -1715,5 +1725,5 @@ document.getElementById('exportBtn').onclick=()=>{
   URL.revokeObjectURL(a.href);
 };
 document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
-document.getElementById('importFile').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const data=JSON.parse(r.result); state={version:8, series:mergeWithSeed(data.series||data)}; save(); render(); alert('Backup importiert.'); }catch(err){ alert('Backup konnte nicht gelesen werden.'); } }; r.readAsText(f); };
+document.getElementById('importFile').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const data=JSON.parse(r.result); state={version:9, series:mergeWithSeed(data.series||data)}; save(); render(); alert('Backup importiert.'); }catch(err){ alert('Backup konnte nicht gelesen werden.'); } }; r.readAsText(f); };
 render();
