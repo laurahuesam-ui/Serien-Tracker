@@ -1404,7 +1404,7 @@ const seed = [
   {
     "title": "Off Campus",
     "list": "watched",
-    "counts": [7],
+    "counts": [8],
     "imdb": "https://www.imdb.com/title/tt33546863/episodes/",
     "notes": "Staffel 1 geschaut; neue Folgen/Staffeln später ergänzbar.",
     "status": "up_to_date",
@@ -1565,6 +1565,13 @@ function cleanupSeries(list){
       s.list='watched';
       if(pct(s)===100) s.status='completed_final';
     }
+    if(titleKey(s.title)==='off campus'){
+      // feste Korrektur: Staffel 1 hat 8 Folgen. Auch vorhandene lokale Daten mit 7 werden angehoben,
+      // damit Bearbeiten/Speichern nicht wieder auf 7/7 zurückfällt.
+      if(!Array.isArray(s.counts) || !s.counts.length) s.counts=[8];
+      if((s.counts[0]||0) < 8) s.counts[0]=8;
+      if((s.currentSeason||0)===1 && (s.currentEpisode||0)>s.counts[0]) s.counts[0]=s.currentEpisode;
+    }
     if(!s.userEdited && titleKey(s.title)==='squid game' && watchedCount(s)<9){
       s.currentSeason=1; s.currentEpisode=s.counts[0]||9; s.status='watching'; s.list='watch'; s.notes=s.notes||'Staffel 1 geschaut.';
     }
@@ -1608,19 +1615,19 @@ function load(){
     try {
       const parsed = JSON.parse(raw);
       const merged = mergeWithSeed(parsed.series || parsed);
-      const data = {version:9, series: cleanupSeries(merged)};
+      const data = {version:10, series: cleanupSeries(merged)};
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(data));
       return data;
     } catch(e){}
   }
-  const data={version:9, series:cleanupSeries(seed)};
+  const data={version:10, series:cleanupSeries(seed)};
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(data));
   return data;
 }
 let state=load(); state.series=mergeWithSeed(state.series); let activeTab='watch'; save();
-function save(){ state.version=9; state.series=cleanupSeries(state.series); localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(state)); }
+function save(){ state.version=10; state.series=cleanupSeries(state.series); localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(state)); }
 function statusLabel(v){ return ({not_started:'Nicht begonnen',watching:'Schaue gerade',up_to_date:'Alles Verfügbare geschaut',completed_final:'Serie beendet + komplett geschaut',completed:'Komplett geschaut (alt)',paused:'Pausiert',dropped:'Abgebrochen'})[v]||v; }
 function statusClass(s){ return ['completed_final','up_to_date','completed'].includes(s.status) ? 'ok' : (pct(s)>0 ? 'warn' : ''); }
 function escapeHtml(s){ return String(s||'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
@@ -1716,7 +1723,7 @@ document.getElementById('seriesForm').onsubmit=e=>{ e.preventDefault(); const id
 document.querySelectorAll('.tab').forEach(btn=>btn.onclick=()=>{document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); activeTab=btn.dataset.list; document.getElementById('listFilter').value=''; renderGrid();});
 document.getElementById('exportBtn').onclick=()=>{
   const date=todayISO();
-  const exportState={...state, version:9, backupDate:date, exportedAt:new Date().toISOString()};
+  const exportState={...state, version:10, backupDate:date, exportedAt:new Date().toISOString()};
   const blob=new Blob([JSON.stringify(exportState,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -1725,5 +1732,5 @@ document.getElementById('exportBtn').onclick=()=>{
   URL.revokeObjectURL(a.href);
 };
 document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
-document.getElementById('importFile').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const data=JSON.parse(r.result); state={version:9, series:mergeWithSeed(data.series||data)}; save(); render(); alert('Backup importiert.'); }catch(err){ alert('Backup konnte nicht gelesen werden.'); } }; r.readAsText(f); };
+document.getElementById('importFile').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const data=JSON.parse(r.result); state={version:10, series:mergeWithSeed(data.series||data)}; save(); render(); alert('Backup importiert.'); }catch(err){ alert('Backup konnte nicht gelesen werden.'); } }; r.readAsText(f); };
 render();
