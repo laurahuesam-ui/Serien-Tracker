@@ -1,6 +1,6 @@
 
 const STORAGE_KEY = 'serienTrackerData_stable';
-const OLD_KEYS = ['serienTrackerData_v2','serienTrackerData_v1'];
+const OLD_KEYS = ['serienTrackerData_v3','serienTrackerData_v2','serienTrackerData_v1'];
 const todayISO = () => new Date().toISOString().slice(0,10);
 const imdbFind = title => `https://www.imdb.com/find/?q=${encodeURIComponent(title)}&s=tt`;
 const seed = [
@@ -1344,7 +1344,7 @@ function fromWatchedCount(counts, watched){ let left=watched; for(let i=0;i<coun
 function watchedCount(s){ let count=0; for(let i=0;i<s.counts.length;i++){ if(i+1 < (s.currentSeason||0)) count += s.counts[i]; else if(i+1 === (s.currentSeason||0)) count += Math.min(s.currentEpisode||0, s.counts[i]); } return count; }
 function totalCount(s){ return (s.counts||[]).reduce((a,b)=>a+b,0); }
 function pct(s){ const t=totalCount(s); return t?Math.round(watchedCount(s)/t*100):0; }
-function syncStatus(s){ const p=pct(s); if(p===100) s.status='completed'; else if(p>0 && s.status==='not_started') s.status='watching'; }
+function syncStatus(s){ const p=pct(s); if(p===100 && !['completed_final','up_to_date','completed'].includes(s.status)) s.status='up_to_date'; else if(p>0 && s.status==='not_started') s.status='watching'; }
 function mergeWithSeed(existing){
   const normalizedExisting = normalize(existing || []);
   const normalizedSeed = normalize(seed);
@@ -1372,29 +1372,91 @@ function load(){
     try {
       const parsed = JSON.parse(raw);
       const merged = mergeWithSeed(parsed.series || parsed);
-      const data = {version:3, series: merged};
+      const data = {version:4, series: merged};
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(data));
       return data;
     } catch(e){}
   }
-  const data={version:3, series:normalize(seed)};
+  const data={version:4, series:normalize(seed)};
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(data));
   return data;
 }
 let state=load(); let activeTab='watch'; save();
-function save(){ state.version=3; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(state)); }
-function statusLabel(v){ return ({not_started:'Nicht begonnen',watching:'Schaue gerade',completed:'Komplett geschaut',paused:'Pausiert',dropped:'Abgebrochen'})[v]||v; }
+function save(){ state.version=4; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(state)); }
+function statusLabel(v){ return ({not_started:'Nicht begonnen',watching:'Schaue gerade',up_to_date:'Alles Verfügbare geschaut',completed_final:'Serie beendet + komplett geschaut',completed:'Komplett geschaut (alt)',paused:'Pausiert',dropped:'Abgebrochen'})[v]||v; }
+function statusClass(s){ return ['completed_final','up_to_date','completed'].includes(s.status) ? 'ok' : (pct(s)>0 ? 'warn' : ''); }
 function escapeHtml(s){ return String(s||'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 function render(){ renderDashboard(); renderGrid(); }
-function renderDashboard(){ const all=state.series, total=all.length, tw=all.filter(s=>s.list==='watch').length, wl=all.filter(s=>s.list==='watched').length, eps=all.reduce((a,s)=>a+totalCount(s),0), done=all.reduce((a,s)=>a+watchedCount(s),0); document.getElementById('dashboard').innerHTML=`<article class="stat"><span>${total}</span><small>Serien gesamt</small></article><article class="stat"><span>${tw}</span><small>To watch</small></article><article class="stat"><span>${wl}</span><small>Geschaut-Liste</small></article><article class="stat"><span>${done}/${eps}</span><small>Folgen Fortschritt</small></article>`; }
+function renderDashboard(){ const all=state.series, total=all.length, tw=all.filter(s=>s.list==='watch').length, wl=all.filter(s=>s.list==='watched').length, up=all.filter(s=>s.status==='up_to_date').length, fin=all.filter(s=>s.status==='completed_final'||s.status==='completed').length, eps=all.reduce((a,s)=>a+totalCount(s),0), done=all.reduce((a,s)=>a+watchedCount(s),0); document.getElementById('dashboard').innerHTML=`<article class="stat"><span>${total}</span><small>Serien gesamt</small></article><article class="stat"><span>${tw}</span><small>To watch</small></article><article class="stat"><span>${up}</span><small>Alles Verfügbare geschaut</small></article><article class="stat"><span>${fin}</span><small>Serien beendet/komplett</small></article>`; }
 function filtered(){ const q=document.getElementById('searchInput').value.trim().toLowerCase(); const lf=document.getElementById('listFilter').value || (activeTab==='all'?'':activeTab); const sf=document.getElementById('statusFilter').value; const sort=document.getElementById('sortSelect').value; let arr=state.series.filter(s=>(!q||s.title.toLowerCase().includes(q))&&(!lf||s.list===lf)&&(!sf||s.status===sf)); if(sort==='title') arr.sort((a,b)=>a.title.localeCompare(b.title,'de')); if(sort==='progress') arr.sort((a,b)=>pct(a)-pct(b)||a.title.localeCompare(b.title,'de')); if(sort==='recent') arr.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)); return arr; }
 function currentText(s){ if(!s.currentSeason||!s.currentEpisode) return 'Noch keine Folge gesetzt'; return `Aktuell: S${s.currentSeason} F${s.currentEpisode}`; }
-function renderGrid(){ const grid=document.getElementById('seriesGrid'); const arr=filtered(); grid.innerHTML=arr.map(s=>{ const p=pct(s), w=watchedCount(s), t=totalCount(s); return `<article class="card" data-open="${s.id}"><div class="card-head"><h3>${escapeHtml(s.title)}</h3><span class="pill ${p===100?'ok':p>0?'warn':''}">${p}%</span></div><div class="badges"><span class="pill">${s.list==='watch'?'To watch':'Geschaut'}</span><span class="pill">${statusLabel(s.status)}</span><span class="pill">${s.counts.length} Staffeln</span></div><div class="progress"><span style="width:${p}%"></span></div><div class="series-meta"><span>${w}/${t} Folgen</span><span>${currentText(s)}</span></div>${s.lastDate?`<p class="small">Zuletzt: ${s.lastDate}</p>`:''}${s.notes?`<p class="small">${escapeHtml(s.notes)}</p>`:''}</article>`; }).join('') || '<p class="meta">Keine Serien gefunden.</p>'; grid.querySelectorAll('[data-open]').forEach(el=>el.onclick=()=>openDetail(el.dataset.open)); }
-function openDetail(id){ const s=state.series.find(x=>x.id===id); if(!s) return; const p=pct(s), w=watchedCount(s), t=totalCount(s); document.getElementById('detailContent').innerHTML=`<div class="detail-top"><div><p class="eyebrow">${s.list==='watch'?'To watch':'Geschaut'}</p><h2>${escapeHtml(s.title)}</h2><p class="meta">${statusLabel(s.status)} · ${s.counts.length} Staffeln · ${t} Folgen</p></div><button class="secondary" onclick="document.getElementById('detailDialog').close()">Schließen</button></div><div class="progress"><span style="width:${p}%"></span></div><p><b>${w}/${t} Folgen</b> · ${p}% · ${currentText(s)}</p><p class="source"><a href="${s.imdb}" target="_blank" rel="noopener">IMDb öffnen</a></p>${s.notes?`<p class="meta">${escapeHtml(s.notes)}</p>`:''}<div class="season-grid">${s.counts.map((c,i)=>`<div class="season-box"><b>Staffel ${i+1}</b><br>${c} Folgen</div>`).join('')}</div><div class="detail-actions"><button onclick="openSeriesEditor('${s.id}')">Bearbeiten</button><button class="secondary" onclick="setToday('${s.id}')">Datum heute</button><button class="secondary" onclick="markComplete('${s.id}')">Alles geschaut</button><button class="secondary" onclick="markOpen('${s.id}')">Zurücksetzen</button></div>`; document.getElementById('detailDialog').showModal(); }
-function setToday(id){ const s=state.series.find(x=>x.id===id); s.lastDate=todayISO(); s.dateMode='date'; s.updatedAt=Date.now(); save(); render(); openDetail(id); }
-function markComplete(id){ const s=state.series.find(x=>x.id===id); s.currentSeason=s.counts.length; s.currentEpisode=s.counts.at(-1)||0; s.status='completed'; s.list='watched'; s.updatedAt=Date.now(); save(); render(); openDetail(id); }
+function renderGrid(){ const grid=document.getElementById('seriesGrid'); const arr=filtered(); grid.innerHTML=arr.map(s=>{ const p=pct(s), w=watchedCount(s), t=totalCount(s); return `<article class="card" data-open="${s.id}"><div class="card-head"><h3>${escapeHtml(s.title)}</h3><span class="pill ${p===100?'ok':p>0?'warn':''}">${p}%</span></div><div class="badges"><span class="pill">${s.list==='watch'?'To watch':'Geschaut'}</span><span class="pill ${statusClass(s)}">${statusLabel(s.status)}</span><span class="pill">${s.counts.length} Staffeln</span></div><div class="progress"><span style="width:${p}%"></span></div><div class="series-meta"><span>${w}/${t} Folgen</span><span>${currentText(s)}</span></div>${s.lastDate?`<p class="small">Zuletzt: ${s.lastDate}</p>`:''}${s.notes?`<p class="small">${escapeHtml(s.notes)}</p>`:''}</article>`; }).join('') || '<p class="meta">Keine Serien gefunden.</p>'; grid.querySelectorAll('[data-open]').forEach(el=>el.onclick=()=>openDetail(el.dataset.open)); }
+function openDetail(id){
+  const s=state.series.find(x=>x.id===id); if(!s) return;
+  const p=pct(s), w=watchedCount(s), t=totalCount(s);
+  const seasonButtons = s.counts.map((c,i)=>`<button class="secondary season-action" onclick="markSeason('${s.id}', ${i+1})">Staffel ${i+1} geschaut</button>`).join('');
+  document.getElementById('detailContent').innerHTML=`
+    <div class="detail-top">
+      <div>
+        <p class="eyebrow">${s.list==='watch'?'To watch':'Geschaut'}</p>
+        <h2>${escapeHtml(s.title)}</h2>
+        <p class="meta">${statusLabel(s.status)} · ${s.counts.length} Staffeln · ${t} Folgen</p>
+      </div>
+      <button class="secondary" onclick="document.getElementById('detailDialog').close()">Schließen</button>
+    </div>
+    <div class="progress"><span style="width:${p}%"></span></div>
+    <p><b>${w}/${t} Folgen</b> · ${p}% · ${currentText(s)}</p>
+    <p class="source"><a href="${s.imdb}" target="_blank" rel="noopener">IMDb öffnen</a></p>
+    ${s.notes?`<p class="meta">${escapeHtml(s.notes)}</p>`:''}
+    <h3>Schnellaktionen</h3>
+    <div class="detail-actions">
+      <button onclick="nextEpisode('${s.id}')">+ Nächste Folge</button>
+      <button class="secondary" onclick="nextSeason('${s.id}')">+ Nächste Staffel</button>
+      <button class="secondary" onclick="markUpToDate('${s.id}')">Alles Verfügbare geschaut</button>
+      <button class="secondary" onclick="markComplete('${s.id}')">Serie beendet + geschaut</button>
+      <button class="secondary" onclick="openSeriesEditor('${s.id}')">Bis Staffel/Folge ändern</button>
+      <button class="secondary" onclick="setToday('${s.id}')">Datum heute</button>
+      <button class="secondary" onclick="markOpen('${s.id}')">Zurücksetzen</button>
+    </div>
+    <h3>Staffeln</h3>
+    <div class="season-grid">${s.counts.map((c,i)=>`<div class="season-box"><b>Staffel ${i+1}</b><br>${c} Folgen</div>`).join('')}</div>
+    <div class="detail-actions season-actions">${seasonButtons}</div>`;
+  document.getElementById('detailDialog').showModal();
+}
+
+function setToday(id){ const s=state.series.find(x=>x.id===id); if(!s) return; s.dateMode='date'; s.lastDate=todayISO(); s.updatedAt=Date.now(); save(); render(); openDetail(id); }
+function updateAfterProgress(s){
+  if(!s) return;
+  if(s.currentSeason>0 || s.currentEpisode>0){ if(s.status==='not_started') s.status='watching'; }
+  if(pct(s)===100 && !['up_to_date','completed_final','completed'].includes(s.status)) s.status='up_to_date';
+  s.lastDate=todayISO(); s.dateMode='date'; s.updatedAt=Date.now();
+}
+function nextEpisode(id){
+  const s=state.series.find(x=>x.id===id); if(!s) return;
+  if(!s.currentSeason || s.currentSeason<1){ s.currentSeason=1; s.currentEpisode=0; }
+  const max=s.counts[s.currentSeason-1]||0;
+  if(s.currentEpisode < max){ s.currentEpisode += 1; }
+  else if(s.currentSeason < s.counts.length){ s.currentSeason += 1; s.currentEpisode = 1; }
+  updateAfterProgress(s); save(); render(); openDetail(id);
+}
+function nextSeason(id){
+  const s=state.series.find(x=>x.id===id); if(!s) return;
+  if(!s.currentSeason || s.currentSeason<1){ s.currentSeason=1; }
+  else if(s.currentSeason < s.counts.length){ s.currentSeason += 1; }
+  s.currentEpisode = s.counts[s.currentSeason-1]||0;
+  updateAfterProgress(s); save(); render(); openDetail(id);
+}
+function markSeason(id, seasonNo){
+  const s=state.series.find(x=>x.id===id); if(!s) return;
+  s.currentSeason=Math.max(1, Math.min(seasonNo, s.counts.length));
+  s.currentEpisode=s.counts[s.currentSeason-1]||0;
+  updateAfterProgress(s); save(); render(); openDetail(id);
+}
+
+function markUpToDate(id){ const s=state.series.find(x=>x.id===id); s.currentSeason=s.counts.length; s.currentEpisode=s.counts.at(-1)||0; s.status='up_to_date'; s.list='watched'; s.updatedAt=Date.now(); save(); render(); openDetail(id); }
+function markComplete(id){ const s=state.series.find(x=>x.id===id); s.currentSeason=s.counts.length; s.currentEpisode=s.counts.at(-1)||0; s.status='completed_final'; s.list='watched'; s.updatedAt=Date.now(); save(); render(); openDetail(id); }
 function markOpen(id){ const s=state.series.find(x=>x.id===id); s.currentSeason=0; s.currentEpisode=0; s.status='not_started'; s.updatedAt=Date.now(); save(); render(); openDetail(id); }
 function parseCounts(v){ return v.split(',').map(x=>parseInt(x.trim(),10)).filter(n=>Number.isFinite(n)&&n>0); }
 function openSeriesEditor(id){ const s=id?state.series.find(x=>x.id===id):null; document.getElementById('seriesDialogTitle').textContent=s?'Serie bearbeiten':'Neue Serie'; document.getElementById('seriesId').value=s?.id||''; document.getElementById('titleInput').value=s?.title||''; document.getElementById('listInput').value=s?.list||'watch'; document.getElementById('statusInput').value=s?.status||'not_started'; document.getElementById('imdbInput').value=s?.imdb||''; document.getElementById('seasonCountsInput').value=s?s.counts.join(','):''; document.getElementById('currentSeasonInput').value=s?.currentSeason||''; document.getElementById('currentEpisodeInput').value=s?.currentEpisode||''; document.getElementById('lastDateInput').value=s?.lastDate||''; document.getElementById('dateModeInput').value=s?.dateMode||'none'; document.getElementById('notesInput').value=s?.notes||''; document.getElementById('deleteSeriesBtn').classList.toggle('hidden',!s); document.getElementById('seriesDialog').showModal(); }
@@ -1406,5 +1468,5 @@ document.getElementById('seriesForm').onsubmit=e=>{ e.preventDefault(); const id
 document.querySelectorAll('.tab').forEach(btn=>btn.onclick=()=>{document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); activeTab=btn.dataset.list; document.getElementById('listFilter').value=''; renderGrid();});
 document.getElementById('exportBtn').onclick=()=>{ const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='serien-tracker-backup.json'; a.click(); URL.revokeObjectURL(a.href); };
 document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
-document.getElementById('importFile').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const data=JSON.parse(r.result); state={version:3, series:mergeWithSeed(data.series||data)}; save(); render(); alert('Backup importiert.'); }catch(err){ alert('Backup konnte nicht gelesen werden.'); } }; r.readAsText(f); };
+document.getElementById('importFile').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const data=JSON.parse(r.result); state={version:4, series:mergeWithSeed(data.series||data)}; save(); render(); alert('Backup importiert.'); }catch(err){ alert('Backup konnte nicht gelesen werden.'); } }; r.readAsText(f); };
 render();

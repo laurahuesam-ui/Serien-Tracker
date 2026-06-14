@@ -1,6 +1,7 @@
-# Serien Tracker PWA v3
+# Serien Tracker PWA v5
 
 Fix:
-- Neue Serien werden beim Update automatisch ergänzt, auch wenn schon alte Daten im Browser gespeichert sind.
-- Bestehender Fortschritt/Status wird dabei nicht überschrieben.
-- Speicher ist stabil und Sicherheitsbackup bleibt erhalten.
+- echte v5-ZIP erzeugt.
+- Schnellbuttons wieder ergänzt: nächste Folge, nächste Staffel, Staffel X geschaut, alles verfügbar geschaut, Serie beendet + geschaut.
+- Status-Unterscheidung bleibt erhalten.
+- Bestehende Daten bleiben durch stabilen Speicher erhalten.

@@ -12,7 +12,7 @@
 <header class="app-header">
   <div>
     <p class="eyebrow">Private PWA · lokale Daten</p>
-    <h1>Serien Tracker <small>v3</small></h1>
+    <h1>Serien Tracker <small>v5</small></h1>
   </div>
   <div class="header-actions">
     <button id="exportBtn" class="secondary" type="button">Backup exportieren</button>
@@ -26,7 +26,7 @@
   <section class="toolbar">
     <input id="searchInput" type="search" placeholder="Serie suchen ..." />
     <select id="listFilter"><option value="">Alle Listen</option><option value="watch">To watch</option><option value="watched">Geschaut</option></select>
-    <select id="statusFilter"><option value="">Alle Status</option><option value="not_started">Nicht begonnen</option><option value="watching">Schaue gerade</option><option value="completed">Komplett geschaut</option><option value="paused">Pausiert</option><option value="dropped">Abgebrochen</option></select>
+    <select id="statusFilter"><option value="">Alle Status</option><option value="not_started">Nicht begonnen</option><option value="watching">Schaue gerade</option><option value="up_to_date">Alles Verfügbare geschaut</option><option value="completed_final">Serie beendet + komplett geschaut</option><option value="completed">Komplett geschaut (alt)</option><option value="paused">Pausiert</option><option value="dropped">Abgebrochen</option></select>
     <select id="sortSelect"><option value="title">A–Z</option><option value="progress">Fortschritt wenig zuerst</option><option value="recent">Zuletzt geändert</option></select>
   </section>
   <section class="tabs">
@@ -44,7 +44,7 @@
     <div class="formgrid">
       <label>Titel<input id="titleInput" required /></label>
       <label>Liste<select id="listInput"><option value="watch">To watch</option><option value="watched">Geschaut</option></select></label>
-      <label>Status<select id="statusInput"><option value="not_started">Nicht begonnen</option><option value="watching">Schaue gerade</option><option value="completed">Komplett geschaut</option><option value="paused">Pausiert</option><option value="dropped">Abgebrochen</option></select></label>
+      <label>Status<select id="statusInput"><option value="not_started">Nicht begonnen</option><option value="watching">Schaue gerade</option><option value="up_to_date">Alles Verfügbare geschaut</option><option value="completed_final">Serie beendet + komplett geschaut</option><option value="completed">Komplett geschaut (alt)</option><option value="paused">Pausiert</option><option value="dropped">Abgebrochen</option></select></label>
       <label>IMDb-Link / Suche<input id="imdbInput" placeholder="https://www.imdb.com/..." /></label>
       <label>Staffel-Folgen<input id="seasonCountsInput" placeholder="z.B. 8,8,10" /></label>
       <label>Aktuelle Staffel<input id="currentSeasonInput" type="number" min="0" placeholder="z.B. 2" /></label>
