@@ -1,6 +1,6 @@
 
-const STORAGE_KEY = 'serienTrackerData_v2';
-const OLD_KEYS = ['serienTrackerData_v1'];
+const STORAGE_KEY = 'serienTrackerData_stable';
+const OLD_KEYS = ['serienTrackerData_v2','serienTrackerData_v1'];
 const todayISO = () => new Date().toISOString().slice(0,10);
 const imdbFind = title => `https://www.imdb.com/find/?q=${encodeURIComponent(title)}&s=tt`;
 const seed = [
@@ -1345,14 +1345,46 @@ function watchedCount(s){ let count=0; for(let i=0;i<s.counts.length;i++){ if(i+
 function totalCount(s){ return (s.counts||[]).reduce((a,b)=>a+b,0); }
 function pct(s){ const t=totalCount(s); return t?Math.round(watchedCount(s)/t*100):0; }
 function syncStatus(s){ const p=pct(s); if(p===100) s.status='completed'; else if(p>0 && s.status==='not_started') s.status='watching'; }
+function mergeWithSeed(existing){
+  const normalizedExisting = normalize(existing || []);
+  const normalizedSeed = normalize(seed);
+  const byTitle = new Map(normalizedExisting.map(s => [s.title.trim().toLowerCase(), s]));
+  for(const starter of normalizedSeed){
+    const key = starter.title.trim().toLowerCase();
+    if(!byTitle.has(key)){
+      normalizedExisting.push(starter);
+      byTitle.set(key, starter);
+    } else {
+      const current = byTitle.get(key);
+      // Nur fehlende technische Daten ergänzen, aber deinen Fortschritt/Status nicht überschreiben.
+      if((!current.counts || !current.counts.length) && starter.counts?.length) current.counts = starter.counts;
+      if(!current.imdb && starter.imdb) current.imdb = starter.imdb;
+      if(!current.notes && starter.notes) current.notes = starter.notes;
+      if(!current.list && starter.list) current.list = starter.list;
+    }
+  }
+  return normalizedExisting;
+}
 function load(){
   let raw = localStorage.getItem(STORAGE_KEY);
   if(!raw) for(const k of OLD_KEYS){ raw = localStorage.getItem(k); if(raw) break; }
-  if(raw){ try { return {version:2, series: normalize(JSON.parse(raw).series || JSON.parse(raw))}; } catch(e){} }
-  const data={version:2, series:normalize(seed)}; localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); return data;
+  if(raw){
+    try {
+      const parsed = JSON.parse(raw);
+      const merged = mergeWithSeed(parsed.series || parsed);
+      const data = {version:3, series: merged};
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(data));
+      return data;
+    } catch(e){}
+  }
+  const data={version:3, series:normalize(seed)};
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(data));
+  return data;
 }
 let state=load(); let activeTab='watch'; save();
-function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function save(){ state.version=3; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(state)); }
 function statusLabel(v){ return ({not_started:'Nicht begonnen',watching:'Schaue gerade',completed:'Komplett geschaut',paused:'Pausiert',dropped:'Abgebrochen'})[v]||v; }
 function escapeHtml(s){ return String(s||'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 function render(){ renderDashboard(); renderGrid(); }
@@ -1374,5 +1406,5 @@ document.getElementById('seriesForm').onsubmit=e=>{ e.preventDefault(); const id
 document.querySelectorAll('.tab').forEach(btn=>btn.onclick=()=>{document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); activeTab=btn.dataset.list; document.getElementById('listFilter').value=''; renderGrid();});
 document.getElementById('exportBtn').onclick=()=>{ const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='serien-tracker-backup.json'; a.click(); URL.revokeObjectURL(a.href); };
 document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
-document.getElementById('importFile').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const data=JSON.parse(r.result); state={version:2, series:normalize(data.series||data)}; save(); render(); alert('Backup importiert.'); }catch(err){ alert('Backup konnte nicht gelesen werden.'); } }; r.readAsText(f); };
+document.getElementById('importFile').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const data=JSON.parse(r.result); state={version:3, series:mergeWithSeed(data.series||data)}; save(); render(); alert('Backup importiert.'); }catch(err){ alert('Backup konnte nicht gelesen werden.'); } }; r.readAsText(f); };
 render();

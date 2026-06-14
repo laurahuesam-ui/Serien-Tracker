@@ -1,5 +1,6 @@
-# Serien Tracker PWA v2
+# Serien Tracker PWA v3
 
-Schlanke Version: keine einzelnen Folgen als Objekte. Pro Serie werden nur Staffeln/Folgen-Anzahlen gespeichert plus aktueller Stand als Staffel/Folge.
-
-Neu: zusätzliche Serien ergänzt, Backup Export/Import, GitHub Pages/PWA-ready.
+Fix:
+- Neue Serien werden beim Update automatisch ergänzt, auch wenn schon alte Daten im Browser gespeichert sind.
+- Bestehender Fortschritt/Status wird dabei nicht überschrieben.
+- Speicher ist stabil und Sicherheitsbackup bleibt erhalten.
