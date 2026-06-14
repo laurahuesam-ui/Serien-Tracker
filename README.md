@@ -1,7 +1,7 @@
-# Serien Tracker PWA v5
+# Serien Tracker PWA v6
 
-Fix:
-- echte v5-ZIP erzeugt.
-- Schnellbuttons wieder ergänzt: nächste Folge, nächste Staffel, Staffel X geschaut, alles verfügbar geschaut, Serie beendet + geschaut.
-- Status-Unterscheidung bleibt erhalten.
-- Bestehende Daten bleiben durch stabilen Speicher erhalten.
+Update:
+- Oben zwischen Titel und Backup steht jetzt die Gesamtanzeige: geschaut/alle Folgen.
+- Backup-Dateiname enthält das heutige Datum.
+- Backup-Datei enthält zusätzlich backupDate und exportedAt.
+- Schnellbuttons und Status-Unterscheidung aus v5 bleiben erhalten.
