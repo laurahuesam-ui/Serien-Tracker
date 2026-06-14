@@ -1360,6 +1360,66 @@ const seed = [
     "status": "watching",
     "currentSeason": 1,
     "currentEpisode": 9
+  },
+  {
+    "title": "Hawkeye",
+    "list": "watched",
+    "counts": [6],
+    "imdb": "https://www.imdb.com/title/tt10160804/episodes/",
+    "notes": "Fertig geschaut.",
+    "status": "completed_final"
+  },
+  {
+    "title": "Moon Knight",
+    "list": "watched",
+    "counts": [6],
+    "imdb": "https://www.imdb.com/title/tt10234724/episodes/",
+    "notes": "Fertig geschaut.",
+    "status": "completed_final"
+  },
+  {
+    "title": "Queen Charlotte: A Bridgerton Story",
+    "list": "watched",
+    "counts": [6],
+    "imdb": "https://www.imdb.com/title/tt14661396/episodes/",
+    "notes": "Fertig geschaut.",
+    "status": "completed_final"
+  },
+  {
+    "title": "Gilmore Girls: A Year in the Life",
+    "list": "watched",
+    "counts": [4],
+    "imdb": "https://www.imdb.com/title/tt5435008/episodes/",
+    "notes": "Fertig geschaut.",
+    "status": "completed_final"
+  },
+  {
+    "title": "Maid",
+    "list": "watched",
+    "counts": [10],
+    "imdb": "https://www.imdb.com/title/tt11337908/episodes/",
+    "notes": "Fertig geschaut.",
+    "status": "completed_final"
+  },
+  {
+    "title": "Off Campus",
+    "list": "watched",
+    "counts": [7],
+    "imdb": "https://www.imdb.com/title/tt33546863/episodes/",
+    "notes": "Staffel 1 geschaut; neue Folgen/Staffeln später ergänzbar.",
+    "status": "up_to_date",
+    "currentSeason": 1,
+    "currentEpisode": 7
+  },
+  {
+    "title": "The Rookie",
+    "list": "watch",
+    "counts": [20,20,14,22,22,10,18,18],
+    "imdb": "https://www.imdb.com/title/tt7587890/episodes/",
+    "notes": "Aktuell in Staffel 5.",
+    "status": "watching",
+    "currentSeason": 5,
+    "currentEpisode": 0
   }
 ];
 function titleKey(title){
@@ -1369,6 +1429,7 @@ function titleKey(title){
     .replace(/[’‘]/g,"'")
     .replace(/^marvel['’]s agent carter$/,"marvel's agent carter")
     .replace(/^agent carter$/,"marvel's agent carter")
+    .replace(/^moonknight$/,"moon knight")
     .replace(/\s+/g,' ');
 }
 function mergeSeriesData(base, incoming){
@@ -1377,16 +1438,28 @@ function mergeSeriesData(base, incoming){
   const bw = watchedCount(base), iw = watchedCount(incoming);
   const better = iw > bw ? incoming : base;
   const other = better === base ? incoming : base;
+  const bestWatched = Math.max(bw, iw);
+  let status = better.status || other.status || 'not_started';
+  // Wichtig: Seed-/Update-Daten dürfen gestartete Serien nicht zurück auf „Nicht begonnen“ setzen.
+  if(bestWatched > 0 && status === 'not_started') status = 'watching';
+  if(bw > 0 && iw === 0) status = base.status || 'watching';
+  if(iw > 0 && bw === 0) status = incoming.status || 'watching';
+  if(['completed_final','up_to_date','completed'].includes(base.status) && bw >= iw) status = base.status;
+  if(['completed_final','up_to_date','completed'].includes(incoming.status) && iw >= bw) status = incoming.status;
   return {
     ...other,
     ...better,
     id: better.id || other.id || crypto.randomUUID(),
     title: titleKey(better.title)==="marvel's agent carter" ? "Marvel's Agent Carter" : (better.title || other.title),
     list: (better.list==='watched' || other.list==='watched') ? 'watched' : (better.list || other.list || 'watch'),
-    status: ['completed_final','up_to_date','completed'].includes(better.status) ? better.status : (other.status || better.status || 'not_started'),
+    status,
     imdb: better.imdb || other.imdb || imdbFind(better.title || other.title),
     notes: better.notes || other.notes || '',
     counts: (better.counts && better.counts.length) ? better.counts : (other.counts || []),
+    currentSeason: bestWatched === bw ? (base.currentSeason||0) : (incoming.currentSeason||0),
+    currentEpisode: bestWatched === bw ? (base.currentEpisode||0) : (incoming.currentEpisode||0),
+    lastDate: better.lastDate || other.lastDate || '',
+    dateMode: better.dateMode || other.dateMode || 'none',
     updatedAt: Math.max(better.updatedAt||0, other.updatedAt||0, Date.now())
   };
 }
@@ -1417,6 +1490,56 @@ function normalize(raw){
     };
   }).filter(x=>x.title && x.counts && x.counts.length);
 }
+function setFullWatched(s, status='completed_final'){
+  s.list='watched';
+  s.status=status;
+  s.currentSeason=s.counts.length;
+  s.currentEpisode=s.counts[s.counts.length-1]||0;
+  s.dateMode=s.dateMode||'na';
+}
+function applyFixedCorrections(cleaned){
+  const addOrUpdate = (title, patch, options={}) => {
+    let s = cleaned.find(x => titleKey(x.title) === titleKey(title));
+    if(!s){
+      s = {id:crypto.randomUUID(), title, list:'watch', status:'not_started', counts:[], currentSeason:0, currentEpisode:0, imdb:imdbFind(title), notes:'', lastDate:'', dateMode:'none', updatedAt:Date.now()};
+      cleaned.push(s);
+    }
+    const beforeWatched = watchedCount(s);
+    Object.assign(s, patch);
+    if(options.full) setFullWatched(s, options.status || 'completed_final');
+    if(options.minProgress){
+      const targetWatched = options.minProgress.watched;
+      if(beforeWatched < targetWatched){
+        s.currentSeason = options.minProgress.season;
+        s.currentEpisode = options.minProgress.episode;
+        s.status = options.minProgress.status || 'watching';
+      }
+    }
+    s.updatedAt = Math.max(s.updatedAt||0, Date.now());
+    return s;
+  };
+  // fertige Serien
+  addOrUpdate('72 Cutest Animals', {counts:[12], imdb:'https://www.imdb.com/find/?q=72%20Cutest%20Animals&s=tt'}, {full:true});
+  addOrUpdate('Hawkeye', {counts:[6], imdb:'https://www.imdb.com/title/tt10160804/episodes/'}, {full:true});
+  addOrUpdate('Moon Knight', {counts:[6], imdb:'https://www.imdb.com/title/tt10234724/episodes/'}, {full:true});
+  addOrUpdate('Queen Charlotte: A Bridgerton Story', {counts:[6], imdb:'https://www.imdb.com/title/tt14661396/episodes/'}, {full:true});
+  addOrUpdate('Gilmore Girls: A Year in the Life', {counts:[4], imdb:'https://www.imdb.com/title/tt5435008/episodes/'}, {full:true});
+  addOrUpdate('Maid', {counts:[10], imdb:'https://www.imdb.com/title/tt11337908/episodes/'}, {full:true});
+  addOrUpdate('Y: The Last Man', {counts:[10], imdb:'https://www.imdb.com/title/tt8042500/episodes/'}, {full:true});
+  addOrUpdate('Bones', {counts:[22,21,15,26,22,23,13,24,24,22,22,12], imdb:'https://www.imdb.com/title/tt0460627/episodes/'}, {full:true});
+  addOrUpdate('Suits', {counts:[12,16,16,16,16,16,16,16,10], imdb:'https://www.imdb.com/title/tt1632701/episodes/'}, {full:true});
+  // angefangen / up to date
+  addOrUpdate('Squid Game', {counts:[9,7,6], imdb:'https://www.imdb.com/title/tt10919420/episodes/', list:'watch', notes:'Staffel 1 geschaut.'}, {minProgress:{season:1, episode:9, watched:9, status:'watching'}});
+  addOrUpdate('Off Campus', {counts:[7], imdb:'https://www.imdb.com/title/tt33546863/episodes/', list:'watched', notes:'Staffel 1 geschaut; neue Folgen/Staffeln später ergänzbar.'}, {minProgress:{season:1, episode:7, watched:7, status:'up_to_date'}});
+  addOrUpdate('The Rookie', {counts:[20,20,14,22,22,10,18,18], imdb:'https://www.imdb.com/title/tt7587890/episodes/', list:'watch', notes:'Aktuell in Staffel 5.'}, {minProgress:{season:5, episode:0, watched:76, status:'watching'}});
+  // Korrekturen Folgenzahlen
+  addOrUpdate('The Code', {counts:[12], imdb:'https://www.imdb.com/title/tt8888168/episodes/'});
+  addOrUpdate('Tales by Light', {counts:[6,6,3], imdb:'https://www.imdb.com/title/tt5350276/episodes/'});
+  // Name-Korrektur
+  const agent = cleaned.find(x => titleKey(x.title)==="marvel's agent carter");
+  if(agent) agent.title="Marvel's Agent Carter";
+  return cleaned;
+}
 function cleanupSeries(list){
   const byTitle = new Map();
   for(const item of normalize(list||[])){
@@ -1424,7 +1547,7 @@ function cleanupSeries(list){
     if(!byTitle.has(key)) byTitle.set(key,item);
     else byTitle.set(key, mergeSeriesData(byTitle.get(key), item));
   }
-  const cleaned=[...byTitle.values()];
+  const cleaned=applyFixedCorrections([...byTitle.values()]);
   // feste Korrekturen/Migrationen
   for(const s of cleaned){
     if(titleKey(s.title)==="marvel's agent carter") s.title="Marvel's Agent Carter";
@@ -1432,9 +1555,10 @@ function cleanupSeries(list){
       s.list='watched';
       if(pct(s)===100) s.status='completed_final';
     }
-    if(titleKey(s.title)==='squid game' && (!s.currentSeason || !s.currentEpisode)){
+    if(titleKey(s.title)==='squid game' && watchedCount(s)<9){
       s.currentSeason=1; s.currentEpisode=s.counts[0]||9; s.status='watching'; s.list='watch'; s.notes=s.notes||'Staffel 1 geschaut.';
     }
+    if(watchedCount(s)>0 && s.status==='not_started') s.status='watching';
   }
   return cleaned;
 }
@@ -1474,19 +1598,19 @@ function load(){
     try {
       const parsed = JSON.parse(raw);
       const merged = mergeWithSeed(parsed.series || parsed);
-      const data = {version:7, series: cleanupSeries(merged)};
+      const data = {version:8, series: cleanupSeries(merged)};
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(data));
       return data;
     } catch(e){}
   }
-  const data={version:7, series:cleanupSeries(seed)};
+  const data={version:8, series:cleanupSeries(seed)};
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(data));
   return data;
 }
 let state=load(); state.series=mergeWithSeed(state.series); let activeTab='watch'; save();
-function save(){ state.version=7; state.series=cleanupSeries(state.series); localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(state)); }
+function save(){ state.version=8; state.series=cleanupSeries(state.series); localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(state)); }
 function statusLabel(v){ return ({not_started:'Nicht begonnen',watching:'Schaue gerade',up_to_date:'Alles Verfügbare geschaut',completed_final:'Serie beendet + komplett geschaut',completed:'Komplett geschaut (alt)',paused:'Pausiert',dropped:'Abgebrochen'})[v]||v; }
 function statusClass(s){ return ['completed_final','up_to_date','completed'].includes(s.status) ? 'ok' : (pct(s)>0 ? 'warn' : ''); }
 function escapeHtml(s){ return String(s||'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
@@ -1582,7 +1706,7 @@ document.getElementById('seriesForm').onsubmit=e=>{ e.preventDefault(); const id
 document.querySelectorAll('.tab').forEach(btn=>btn.onclick=()=>{document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); activeTab=btn.dataset.list; document.getElementById('listFilter').value=''; renderGrid();});
 document.getElementById('exportBtn').onclick=()=>{
   const date=todayISO();
-  const exportState={...state, version:7, backupDate:date, exportedAt:new Date().toISOString()};
+  const exportState={...state, version:8, backupDate:date, exportedAt:new Date().toISOString()};
   const blob=new Blob([JSON.stringify(exportState,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -1591,5 +1715,5 @@ document.getElementById('exportBtn').onclick=()=>{
   URL.revokeObjectURL(a.href);
 };
 document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
-document.getElementById('importFile').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const data=JSON.parse(r.result); state={version:7, series:mergeWithSeed(data.series||data)}; save(); render(); alert('Backup importiert.'); }catch(err){ alert('Backup konnte nicht gelesen werden.'); } }; r.readAsText(f); };
+document.getElementById('importFile').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const data=JSON.parse(r.result); state={version:8, series:mergeWithSeed(data.series||data)}; save(); render(); alert('Backup importiert.'); }catch(err){ alert('Backup konnte nicht gelesen werden.'); } }; r.readAsText(f); };
 render();

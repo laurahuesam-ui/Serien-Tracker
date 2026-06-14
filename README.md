@@ -1,11 +1,10 @@
-# Serien Tracker PWA v7
+# Serien Tracker PWA v8
 
-Fixes:
-- Duplikate bereinigt: How I Met Your Mother und Hannah Montana nur noch einmal.
-- Agent Carter in Marvel's Agent Carter umbenannt.
-- Y: The Last Man, Bones und Suits als fertig geschaut ergänzt.
-- Squid Game ergänzt bzw. auf Staffel 1 geschaut gesetzt.
-- Bearbeiten-Button im Detailfenster ergänzt.
-- Migration bereinigt vorhandene Duplikate, ohne Fortschritt/Backup zu löschen.
-
-Quelle für Folgen/Staffeln: IMDb/IMDb-Episodenlisten bzw. manuell in der App bearbeitbar.
+Fix:
+- vorhandene Fortschritte werden beim Update nicht mehr auf „Nicht begonnen“ zurückgesetzt.
+- Fertig geschaut ergänzt: 72 Cutest Animals, Hawkeye, Moon Knight, Queen Charlotte, Gilmore Girls: A Year in the Life, Maid.
+- Off Campus: Staffel 1 geschaut.
+- The Rookie: aktuell in Staffel 5.
+- The Code auf 12 Folgen korrigiert.
+- Tales by Light auf 15 Folgen korrigiert.
+- Datenmigration und Duplikatbereinigung bleiben aktiv.
