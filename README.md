@@ -1,7 +1,11 @@
-# Serien Tracker PWA v6
+# Serien Tracker PWA v7
 
-Update:
-- Oben zwischen Titel und Backup steht jetzt die Gesamtanzeige: geschaut/alle Folgen.
-- Backup-Dateiname enthält das heutige Datum.
-- Backup-Datei enthält zusätzlich backupDate und exportedAt.
-- Schnellbuttons und Status-Unterscheidung aus v5 bleiben erhalten.
+Fixes:
+- Duplikate bereinigt: How I Met Your Mother und Hannah Montana nur noch einmal.
+- Agent Carter in Marvel's Agent Carter umbenannt.
+- Y: The Last Man, Bones und Suits als fertig geschaut ergänzt.
+- Squid Game ergänzt bzw. auf Staffel 1 geschaut gesetzt.
+- Bearbeiten-Button im Detailfenster ergänzt.
+- Migration bereinigt vorhandene Duplikate, ohne Fortschritt/Backup zu löschen.
+
+Quelle für Folgen/Staffeln: IMDb/IMDb-Episodenlisten bzw. manuell in der App bearbeitbar.

@@ -1,6 +1,6 @@
 
 const STORAGE_KEY = 'serienTrackerData_stable';
-const OLD_KEYS = ['serienTrackerData_v3','serienTrackerData_v2','serienTrackerData_v1'];
+const OLD_KEYS = ['serienTrackerData_v6','serienTrackerData_v5','serienTrackerData_v4','serienTrackerData_v3','serienTrackerData_v2','serienTrackerData_v1'];
 const todayISO = () => new Date().toISOString().slice(0,10);
 const imdbFind = title => `https://www.imdb.com/find/?q=${encodeURIComponent(title)}&s=tt`;
 const seed = [
@@ -245,41 +245,12 @@ const seed = [
     "notes": ""
   },
   {
-    "title": "Hannah Montana",
-    "list": "watch",
-    "counts": [
-      26,
-      30,
-      30,
-      13
-    ],
-    "imdb": "",
-    "notes": ""
-  },
-  {
     "title": "Heartstopper",
     "list": "watch",
     "counts": [
       8,
       8,
       8
-    ],
-    "imdb": "",
-    "notes": ""
-  },
-  {
-    "title": "How I Met Your Mother",
-    "list": "watch",
-    "counts": [
-      22,
-      22,
-      20,
-      24,
-      24,
-      24,
-      24,
-      24,
-      24
     ],
     "imdb": "",
     "notes": ""
@@ -696,14 +667,14 @@ const seed = [
     "notes": ""
   },
   {
-    "title": "Agent Carter",
+    "title": "Marvel's Agent Carter",
     "list": "watched",
     "counts": [
       8,
       10
     ],
-    "imdb": "",
-    "notes": ""
+    "imdb": "https://www.imdb.com/title/tt3475734/episodes/",
+    "notes": "Umbenannt von Agent Carter."
   },
   {
     "title": "Austin & Ally",
@@ -1326,44 +1297,175 @@ const seed = [
     ],
     "imdb": "https://www.imdb.com/title/tt8323628/episodes/",
     "notes": "Originaltitel: My Life with the Walter Boys; weitere bestätigte Staffeln später ergänzbar."
+  },
+  {
+    "title": "Y: The Last Man",
+    "list": "watched",
+    "counts": [
+      10
+    ],
+    "imdb": "https://www.imdb.com/title/tt8042500/episodes/",
+    "notes": "",
+    "status": "completed_final"
+  },
+  {
+    "title": "Bones",
+    "list": "watched",
+    "counts": [
+      22,
+      21,
+      15,
+      26,
+      22,
+      23,
+      13,
+      24,
+      24,
+      22,
+      22,
+      12
+    ],
+    "imdb": "https://www.imdb.com/title/tt0460627/episodes/",
+    "notes": "",
+    "status": "completed_final"
+  },
+  {
+    "title": "Suits",
+    "list": "watched",
+    "counts": [
+      12,
+      16,
+      16,
+      16,
+      16,
+      16,
+      16,
+      16,
+      10
+    ],
+    "imdb": "https://www.imdb.com/title/tt1632701/episodes/",
+    "notes": "",
+    "status": "completed_final"
+  },
+  {
+    "title": "Squid Game",
+    "list": "watch",
+    "counts": [
+      9,
+      7,
+      6
+    ],
+    "imdb": "https://www.imdb.com/title/tt10919420/episodes/",
+    "notes": "Staffel 1 geschaut.",
+    "status": "watching",
+    "currentSeason": 1,
+    "currentEpisode": 9
   }
 ];
+function titleKey(title){
+  return String(title||'')
+    .trim()
+    .toLowerCase()
+    .replace(/[’‘]/g,"'")
+    .replace(/^marvel['’]s agent carter$/,"marvel's agent carter")
+    .replace(/^agent carter$/,"marvel's agent carter")
+    .replace(/\s+/g,' ');
+}
+function mergeSeriesData(base, incoming){
+  if(!base) return incoming;
+  if(!incoming) return base;
+  const bw = watchedCount(base), iw = watchedCount(incoming);
+  const better = iw > bw ? incoming : base;
+  const other = better === base ? incoming : base;
+  return {
+    ...other,
+    ...better,
+    id: better.id || other.id || crypto.randomUUID(),
+    title: titleKey(better.title)==="marvel's agent carter" ? "Marvel's Agent Carter" : (better.title || other.title),
+    list: (better.list==='watched' || other.list==='watched') ? 'watched' : (better.list || other.list || 'watch'),
+    status: ['completed_final','up_to_date','completed'].includes(better.status) ? better.status : (other.status || better.status || 'not_started'),
+    imdb: better.imdb || other.imdb || imdbFind(better.title || other.title),
+    notes: better.notes || other.notes || '',
+    counts: (better.counts && better.counts.length) ? better.counts : (other.counts || []),
+    updatedAt: Math.max(better.updatedAt||0, other.updatedAt||0, Date.now())
+  };
+}
 function normalize(raw){
-  return raw.map(x=>{
+  return (raw||[]).filter(Boolean).map(x=>{
     const counts = x.counts || (x.seasons||[]).map(s=>s.episodes? s.episodes.length : s.count).filter(Boolean);
-    let total = counts.reduce((a,b)=>a+b,0);
     let cs = x.currentSeason || 0, ce = x.currentEpisode || 0;
     if(x.seasons && !x.currentSeason){
       let watched=0; x.seasons.forEach(se=>(se.episodes||[]).forEach(ep=>{if(ep.status==='watched') watched++;}));
       const pos = fromWatchedCount(counts, watched); cs=pos.season; ce=pos.episode;
-    } else if(x.list==='watched' || x.status==='completed') { cs=counts.length; ce=counts[counts.length-1]||0; }
-    return {id:x.id||crypto.randomUUID(), title:x.title, list:x.list||'watch', status:x.status || ((x.list==='watched')?'completed':'not_started'), imdb:x.imdb||imdbFind(x.title), notes:x.notes||'', counts, currentSeason:cs, currentEpisode:ce, lastDate:x.lastDate||'', dateMode:x.dateMode||((x.list==='watched')?'na':'none'), updatedAt:x.updatedAt||Date.now()};
-  });
+    } else if((x.list==='watched' || ['completed','completed_final','up_to_date'].includes(x.status)) && !x.currentSeason && counts.length) {
+      cs=counts.length; ce=counts[counts.length-1]||0;
+    }
+    const key = titleKey(x.title);
+    return {
+      id:x.id||crypto.randomUUID(),
+      title:key==="marvel's agent carter" ? "Marvel's Agent Carter" : x.title,
+      list:x.list||'watch',
+      status:x.status || ((x.list==='watched')?'completed':'not_started'),
+      imdb:x.imdb||imdbFind(x.title),
+      notes:x.notes||'',
+      counts,
+      currentSeason:cs,
+      currentEpisode:ce,
+      lastDate:x.lastDate||'',
+      dateMode:x.dateMode||((x.list==='watched')?'na':'none'),
+      updatedAt:x.updatedAt||Date.now()
+    };
+  }).filter(x=>x.title && x.counts && x.counts.length);
+}
+function cleanupSeries(list){
+  const byTitle = new Map();
+  for(const item of normalize(list||[])){
+    const key = titleKey(item.title);
+    if(!byTitle.has(key)) byTitle.set(key,item);
+    else byTitle.set(key, mergeSeriesData(byTitle.get(key), item));
+  }
+  const cleaned=[...byTitle.values()];
+  // feste Korrekturen/Migrationen
+  for(const s of cleaned){
+    if(titleKey(s.title)==="marvel's agent carter") s.title="Marvel's Agent Carter";
+    if(['how i met your mother','hannah montana'].includes(titleKey(s.title))){
+      s.list='watched';
+      if(pct(s)===100) s.status='completed_final';
+    }
+    if(titleKey(s.title)==='squid game' && (!s.currentSeason || !s.currentEpisode)){
+      s.currentSeason=1; s.currentEpisode=s.counts[0]||9; s.status='watching'; s.list='watch'; s.notes=s.notes||'Staffel 1 geschaut.';
+    }
+  }
+  return cleaned;
 }
 function fromWatchedCount(counts, watched){ let left=watched; for(let i=0;i<counts.length;i++){ if(left<=0) return {season:0,episode:0}; if(left<=counts[i]) return {season:i+1,episode:left}; left-=counts[i]; } return {season:counts.length, episode:counts[counts.length-1]||0}; }
-function watchedCount(s){ let count=0; for(let i=0;i<s.counts.length;i++){ if(i+1 < (s.currentSeason||0)) count += s.counts[i]; else if(i+1 === (s.currentSeason||0)) count += Math.min(s.currentEpisode||0, s.counts[i]); } return count; }
+function watchedCount(s){ let count=0; for(let i=0;i<(s.counts||[]).length;i++){ if(i+1 < (s.currentSeason||0)) count += s.counts[i]; else if(i+1 === (s.currentSeason||0)) count += Math.min(s.currentEpisode||0, s.counts[i]); } return count; }
 function totalCount(s){ return (s.counts||[]).reduce((a,b)=>a+b,0); }
 function pct(s){ const t=totalCount(s); return t?Math.round(watchedCount(s)/t*100):0; }
 function syncStatus(s){ const p=pct(s); if(p===100 && !['completed_final','up_to_date','completed'].includes(s.status)) s.status='up_to_date'; else if(p>0 && s.status==='not_started') s.status='watching'; }
 function mergeWithSeed(existing){
-  const normalizedExisting = normalize(existing || []);
-  const normalizedSeed = normalize(seed);
-  const byTitle = new Map(normalizedExisting.map(s => [s.title.trim().toLowerCase(), s]));
+  const normalizedExisting = cleanupSeries(existing || []);
+  const normalizedSeed = cleanupSeries(seed);
+  const byTitle = new Map(normalizedExisting.map(s => [titleKey(s.title), s]));
   for(const starter of normalizedSeed){
-    const key = starter.title.trim().toLowerCase();
+    const key = titleKey(starter.title);
     if(!byTitle.has(key)){
       normalizedExisting.push(starter);
       byTitle.set(key, starter);
     } else {
       const current = byTitle.get(key);
-      // Nur fehlende technische Daten ergänzen, aber deinen Fortschritt/Status nicht überschreiben.
-      if((!current.counts || !current.counts.length) && starter.counts?.length) current.counts = starter.counts;
+      const merged = mergeSeriesData(current, starter);
+      Object.assign(current, merged);
+      // Seed darf deinen Fortschritt nicht zurücksetzen.
+      if(watchedCount(starter) > watchedCount(current)){
+        current.currentSeason = starter.currentSeason;
+        current.currentEpisode = starter.currentEpisode;
+      }
+      if(!current.counts?.length && starter.counts?.length) current.counts = starter.counts;
       if(!current.imdb && starter.imdb) current.imdb = starter.imdb;
-      if(!current.notes && starter.notes) current.notes = starter.notes;
-      if(!current.list && starter.list) current.list = starter.list;
     }
   }
-  return normalizedExisting;
+  return cleanupSeries(normalizedExisting);
 }
 function load(){
   let raw = localStorage.getItem(STORAGE_KEY);
@@ -1372,19 +1474,19 @@ function load(){
     try {
       const parsed = JSON.parse(raw);
       const merged = mergeWithSeed(parsed.series || parsed);
-      const data = {version:4, series: merged};
+      const data = {version:7, series: cleanupSeries(merged)};
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(data));
       return data;
     } catch(e){}
   }
-  const data={version:4, series:normalize(seed)};
+  const data={version:7, series:cleanupSeries(seed)};
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(data));
   return data;
 }
-let state=load(); let activeTab='watch'; save();
-function save(){ state.version=6; localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(state)); }
+let state=load(); state.series=mergeWithSeed(state.series); let activeTab='watch'; save();
+function save(){ state.version=7; state.series=cleanupSeries(state.series); localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); localStorage.setItem('serienTrackerData_backupSafe', JSON.stringify(state)); }
 function statusLabel(v){ return ({not_started:'Nicht begonnen',watching:'Schaue gerade',up_to_date:'Alles Verfügbare geschaut',completed_final:'Serie beendet + komplett geschaut',completed:'Komplett geschaut (alt)',paused:'Pausiert',dropped:'Abgebrochen'})[v]||v; }
 function statusClass(s){ return ['completed_final','up_to_date','completed'].includes(s.status) ? 'ok' : (pct(s)>0 ? 'warn' : ''); }
 function escapeHtml(s){ return String(s||'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
@@ -1428,7 +1530,7 @@ function openDetail(id){
       <button class="secondary" onclick="nextSeason('${s.id}')">+ Nächste Staffel</button>
       <button class="secondary" onclick="markUpToDate('${s.id}')">Alles Verfügbare geschaut</button>
       <button class="secondary" onclick="markComplete('${s.id}')">Serie beendet + geschaut</button>
-      <button class="secondary" onclick="openSeriesEditor('${s.id}')">Bis Staffel/Folge ändern</button>
+      <button class="secondary" onclick="openSeriesEditor('${s.id}')">Bearbeiten</button>
       <button class="secondary" onclick="setToday('${s.id}')">Datum heute</button>
       <button class="secondary" onclick="markOpen('${s.id}')">Zurücksetzen</button>
     </div>
@@ -1480,7 +1582,7 @@ document.getElementById('seriesForm').onsubmit=e=>{ e.preventDefault(); const id
 document.querySelectorAll('.tab').forEach(btn=>btn.onclick=()=>{document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); activeTab=btn.dataset.list; document.getElementById('listFilter').value=''; renderGrid();});
 document.getElementById('exportBtn').onclick=()=>{
   const date=todayISO();
-  const exportState={...state, version:6, backupDate:date, exportedAt:new Date().toISOString()};
+  const exportState={...state, version:7, backupDate:date, exportedAt:new Date().toISOString()};
   const blob=new Blob([JSON.stringify(exportState,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -1489,5 +1591,5 @@ document.getElementById('exportBtn').onclick=()=>{
   URL.revokeObjectURL(a.href);
 };
 document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
-document.getElementById('importFile').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const data=JSON.parse(r.result); state={version:6, series:mergeWithSeed(data.series||data)}; save(); render(); alert('Backup importiert.'); }catch(err){ alert('Backup konnte nicht gelesen werden.'); } }; r.readAsText(f); };
+document.getElementById('importFile').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const data=JSON.parse(r.result); state={version:7, series:mergeWithSeed(data.series||data)}; save(); render(); alert('Backup importiert.'); }catch(err){ alert('Backup konnte nicht gelesen werden.'); } }; r.readAsText(f); };
 render();
